@@ -1,29 +1,10 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/check-alerts",
-      "schedule": "*/5 * * * *"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
-      ]
-    }
-  ]
-}
+{}
 ```
 
-Click **Commit changes**
+Yes, literally just an empty object. Commit changes.
 
 ---
 
-Then go to **Vercel dashboard → your project → Deployments** and check if it auto-redeployed. If not, click the **3 dots → Redeploy**.
-
-Wait 30 seconds then try:
+Vercel will auto-redeploy. Wait 30 seconds then test:
 ```
 https://lp-monitor-backend.vercel.app/api/health
