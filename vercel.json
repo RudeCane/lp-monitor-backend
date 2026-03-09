@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "builds": [
+    { "src": "api/**/*.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1.js" }
+  ],
   "crons": [
     {
       "path": "/api/cron/check-alerts",
@@ -12,8 +18,17 @@
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
       ]
     }
   ]
 }
+```
+
+Click **Commit changes**
+
+---
+
+Vercel will automatically redeploy when you commit. Wait ~60 seconds then test:
+```
+https://lp-monitor-backend.vercel.app/api/health
