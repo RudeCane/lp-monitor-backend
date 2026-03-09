@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LP Volume Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Barlow+Condensed:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#050608;--bg2:#080a0e;--panel:#0c0f15;--panel2:#10141d;
+  --border:#1a2235;--border2:#232f45;
+  --amber:#f5a623;--amber2:#ff6b00;--green:#00e676;--red:#ff1744;
+  --blue:#00b0ff;--cyan:#18ffff;--purple:#d500f9;
+  --muted:#3d5070;--text:#c8d8f0;--text2:#7a99c0;
+  --mono:'IBM Plex Mono',monospace;--display:'Barlow Condensed',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);pointer-events:none;z-index:9999;}
+body::after{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(245,166,35,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(245,166,35,0.025) 1px,transparent 1px);background-size:60px 60px;pointer-events:none;z-index:0;}
+.app{position:relative;z-index:1;max-width:1600px;margin:0 auto;padding:0 20px 80px;}
+
+/* SETUP BANNER */
+.setup-banner{
+  background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.3);
+  padding:12px 20px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+}
+.setup-banner.hidden{display:none;}
+.setup-txt{font-size:0.72rem;color:var(--amber);}
+.setup-input{
+  background:var(--panel2);border:1px solid var(--border2);color:var(--text);
+  font-family:var(--mono);font-size:0.72rem;padding:6px 12px;width:340px;outline:none;
+}
+.setup-input:focus{border-color:var(--amber);}
+.setup-save{
+  background:var(--amber);border:none;color:#000;font-family:var(--mono);
+  font-size:0.7rem;font-weight:700;padding:6px 16px;cursor:pointer;letter-spacing:1px;
+}
+.setup-save:hover{background:var(--amber2);color:#fff;}
+.setup-clear{
+  background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--mono);
+  font-size:0.65rem;padding:5px 10px;cursor:pointer;
+}
+.setup-clear:hover{color:var(--red);border-color:var(--red);}
+
+/* HEADER */
+.header{display:flex;align-items:stretch;justify-content:space-between;padding:18px 0;border-bottom:1px solid var(--border);margin-bottom:20px;gap:24px;}
+.header-left{display:flex;flex-direction:column;justify-content:center;gap:4px;}
+.brand{font-family:var(--display);font-size:2.4rem;font-weight:800;letter-spacing:4px;line-height:1;color:var(--amber);text-shadow:0 0 30px rgba(245,166,35,0.4);}
+.brand span{color:var(--text2);}
+.tagline{font-size:0.58rem;letter-spacing:3px;color:var(--muted);text-transform:uppercase;}
+.header-stats{display:flex;gap:1px;align-items:stretch;}
+.hstat{background:var(--panel);border:1px solid var(--border);padding:10px 20px;text-align:center;min-width:130px;}
+.hstat-label{font-size:0.55rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
+.hstat-val{font-size:1.4rem;font-weight:700;line-height:1;}
+.hstat-val.amber{color:var(--amber);}.hstat-val.green{color:var(--green);}.hstat-val.blue{color:var(--blue);}.hstat-val.cyan{color:var(--cyan);}
+.hstat-sub{font-size:0.6rem;color:var(--muted);margin-top:3px;}
+.header-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:8px;}
+.live-row{display:flex;align-items:center;gap:8px;}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 1.4s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.live-txt{font-size:0.62rem;letter-spacing:2px;color:var(--green);}
+.btn-row{display:flex;gap:8px;}
+.hdr-btn{background:none;border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:0.62rem;letter-spacing:1px;padding:5px 14px;cursor:pointer;transition:all .15s;}
+.hdr-btn:hover{border-color:var(--amber);color:var(--amber);}
+.hdr-btn.alert-btn{border-color:rgba(213,0,249,0.4);color:var(--purple);}
+.hdr-btn.alert-btn:hover{background:rgba(213,0,249,0.1);}
+.hdr-btn.alert-btn .alert-count{
+  display:inline-flex;align-items:center;justify-content:center;
+  background:var(--purple);color:#fff;border-radius:50%;
+  width:16px;height:16px;font-size:0.55rem;font-weight:700;margin-left:6px;
+}
+.ts{font-size:0.58rem;color:var(--muted);}
+
+/* ALERT TOAST */
+.toast-container{position:fixed;top:20px;right:20px;z-index:10000;display:flex;flex-direction:column;gap:8px;max-width:360px;}
+.toast{
+  background:var(--panel2);border:1px solid;
+  padding:12px 16px;animation:slideIn .2s ease;
+  display:flex;align-items:flex-start;gap:10px;
+}
+.toast.spike{border-color:rgba(245,166,35,0.5);}
+.toast.info{border-color:rgba(0,176,255,0.4);}
+.toast-icon{font-size:1rem;flex-shrink:0;margin-top:1px;}
+.toast-body{flex:1;}
+.toast-title{font-size:0.72rem;font-weight:700;margin-bottom:3px;color:var(--amber);}
+.toast.info .toast-title{color:var(--blue);}
+.toast-msg{font-size:0.65rem;color:var(--text2);line-height:1.4;}
+.toast-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.9rem;padding:0 0 0 8px;flex-shrink:0;}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+
+/* ALERTS PANEL */
+.alerts-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;
+  display:flex;justify-content:flex-end;
+}
+.alerts-overlay.hidden{display:none;}
+.alerts-panel{
+  background:var(--bg2);border-left:1px solid var(--border2);
+  width:420px;height:100vh;overflow-y:auto;
+  display:flex;flex-direction:column;
+}
+.ap-header{
+  padding:20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;background:var(--bg2);z-index:10;
+}
+.ap-title{font-family:var(--display);font-size:1.4rem;letter-spacing:2px;color:var(--purple);}
+.ap-close{background:none;border:1px solid var(--border2);color:var(--muted);font-size:1rem;width:30px;height:30px;cursor:pointer;}
+.ap-close:hover{color:var(--red);border-color:var(--red);}
+.ap-body{padding:20px;flex:1;}
+.ap-section{margin-bottom:24px;}
+.ap-section-title{font-size:0.6rem;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.alert-form{display:flex;flex-direction:column;gap:10px;}
+.af-row{display:flex;gap:8px;}
+.af-field{display:flex;flex-direction:column;gap:4px;flex:1;}
+.af-label{font-size:0.58rem;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;}
+.af-input,.af-select{
+  background:var(--panel);border:1px solid var(--border2);color:var(--text);
+  font-family:var(--mono);font-size:0.72rem;padding:7px 10px;outline:none;width:100%;
+}
+.af-input:focus,.af-select:focus{border-color:var(--purple);}
+.af-select option{background:var(--panel2);}
+.add-alert-btn{
+  background:rgba(213,0,249,0.1);border:1px solid rgba(213,0,249,0.4);
+  color:var(--purple);font-family:var(--mono);font-size:0.7rem;letter-spacing:1.5px;
+  padding:8px;cursor:pointer;font-weight:700;transition:all .15s;
+}
+.add-alert-btn:hover{background:rgba(213,0,249,0.2);}
+.alert-list{display:flex;flex-direction:column;gap:8px;}
+.alert-item{
+  background:var(--panel);border:1px solid var(--border);
+  padding:12px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+}
+.ai-info{}
+.ai-label{font-size:0.78rem;font-weight:600;color:var(--text);margin-bottom:3px;}
+.ai-meta{font-size:0.62rem;color:var(--muted);}
+.ai-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem;padding:2px;}
+.ai-del:hover{color:var(--red);}
+.no-alerts{font-size:0.7rem;color:var(--muted);font-style:italic;text-align:center;padding:20px;}
+.ap-check-btn{
+  background:var(--purple);border:none;color:#fff;font-family:var(--mono);
+  font-size:0.72rem;font-weight:700;letter-spacing:1.5px;padding:10px;cursor:pointer;width:100%;
+  transition:opacity .15s;
+}
+.ap-check-btn:hover{opacity:.85;}
+.ap-check-btn:disabled{opacity:.4;cursor:not-allowed;}
+.triggered-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.trig-item{
+  background:rgba(245,166,35,0.06);border:1px solid rgba(245,166,35,0.2);
+  padding:8px 12px;font-size:0.68rem;color:var(--text2);line-height:1.5;
+}
+.trig-pool{font-weight:700;color:var(--amber);}
+
+/* DEX TABS */
+.dex-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);}
+.dex-tab{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 18px;background:var(--panel);border:1px solid var(--border);cursor:pointer;transition:all .15s;position:relative;min-width:110px;}
+.dex-tab:hover{border-color:var(--border2);}
+.dex-tab.active{border-color:var(--amber);background:rgba(245,166,35,0.06);}
+.dex-tab.active::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:2px;background:var(--amber);}
+.dex-tab-icon{font-size:1.3rem;line-height:1;}
+.dex-tab-name{font-size:0.65rem;letter-spacing:1.5px;font-weight:600;color:var(--text);}
+.dex-tab.active .dex-tab-name{color:var(--amber);}
+.dex-tab-chain{font-size:0.55rem;color:var(--muted);letter-spacing:1px;}
+.dex-tab-vol{font-size:0.6rem;color:var(--green);font-weight:600;}
+.dex-tab-status{position:absolute;top:6px;right:6px;width:5px;height:5px;border-radius:50%;}
+.dex-tab-status.ok{background:var(--green);}.dex-tab-status.loading{background:var(--amber);animation:blink 1s infinite;}.dex-tab-status.error{background:var(--red);}
+.dex-tab.all-tab{background:linear-gradient(135deg,rgba(245,166,35,0.08),rgba(0,176,255,0.08));border-color:var(--border2);}
+.dex-tab.all-tab.active{border-color:var(--cyan);}
+.dex-tab.all-tab.active::after{background:var(--cyan);}
+.dex-tab.all-tab.active .dex-tab-name{color:var(--cyan);}
+
+/* FILTERS */
+.filters{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+.search{background:var(--panel);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:0.72rem;padding:7px 14px;width:240px;outline:none;transition:border-color .15s;}
+.search:focus{border-color:var(--amber);}
+.search::placeholder{color:var(--muted);}
+.fgroup{display:flex;align-items:center;gap:6px;}
+.flabel{font-size:0.55rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase;}
+.fselect{background:var(--panel);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:0.68rem;padding:7px 10px;outline:none;cursor:pointer;}
+.fselect option{background:var(--panel2);}
+.time-btns{display:flex;border:1px solid var(--border);overflow:hidden;}
+.time-btn{padding:6px 14px;background:none;border:none;font-family:var(--mono);font-size:0.65rem;letter-spacing:1px;color:var(--muted);cursor:pointer;transition:all .15s;border-right:1px solid var(--border);}
+.time-btn:last-child{border-right:none;}
+.time-btn:hover{color:var(--text);background:var(--panel2);}
+.time-btn.active{background:var(--amber);color:#000;font-weight:700;}
+.min-vol-wrap{display:flex;align-items:center;gap:8px;}
+.range-input{accent-color:var(--amber);cursor:pointer;width:100px;}
+.range-val{font-size:0.65rem;color:var(--amber);min-width:65px;}
+.results-count{margin-left:auto;font-size:0.62rem;color:var(--muted);letter-spacing:1px;}
+
+/* TABLE */
+.table-container{background:var(--panel);border:1px solid var(--border);overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:var(--bg2);border-bottom:2px solid var(--border2);}
+th{padding:11px 12px;font-size:0.55rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase;text-align:left;cursor:pointer;white-space:nowrap;user-select:none;border-right:1px solid rgba(26,34,53,0.5);}
+th:last-child{border-right:none;}
+th:hover{color:var(--amber);}
+th.sorted{color:var(--amber);}
+tbody tr{border-bottom:1px solid rgba(26,34,53,0.7);transition:background .08s;}
+tbody tr:hover{background:rgba(245,166,35,0.03);cursor:pointer;}
+tbody tr:last-child{border-bottom:none;}
+td{padding:10px 12px;font-size:0.78rem;vertical-align:middle;white-space:nowrap;border-right:1px solid rgba(26,34,53,0.3);}
+td:last-child{border-right:none;}
+
+.pool-cell{display:flex;align-items:center;gap:10px;min-width:180px;}
+.pool-logo{width:30px;height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.7rem;flex-shrink:0;}
+.pool-name-main{font-size:0.82rem;font-weight:600;color:var(--text);letter-spacing:.5px;}
+.pool-addr{font-size:0.58rem;color:var(--muted);margin-top:1px;}
+.dex-badge{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:2px;font-size:0.58rem;letter-spacing:1.5px;font-weight:700;border:1px solid;white-space:nowrap;}
+.dex-uni-v2{color:#ff007a;border-color:rgba(255,0,122,.3);background:rgba(255,0,122,.07);}
+.dex-uni-v3{color:#ff6da0;border-color:rgba(255,109,160,.3);background:rgba(255,109,160,.07);}
+.dex-uni-v4{color:#ffb3cc;border-color:rgba(255,179,204,.25);background:rgba(255,179,204,.06);}
+.dex-cake-v2{color:var(--amber);border-color:rgba(245,166,35,.3);background:rgba(245,166,35,.07);}
+.dex-cake-v3{color:#ffcc44;border-color:rgba(255,204,68,.3);background:rgba(255,204,68,.07);}
+.dex-cake-v4{color:#ffe088;border-color:rgba(255,224,136,.25);background:rgba(255,224,136,.06);}
+.dex-meteora{color:var(--blue);border-color:rgba(0,176,255,.3);background:rgba(0,176,255,.07);}
+.dex-orca{color:var(--cyan);border-color:rgba(24,255,255,.3);background:rgba(24,255,255,.07);}
+.dex-jito{color:var(--purple);border-color:rgba(213,0,249,.3);background:rgba(213,0,249,.07);}
+.chain-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:2px;font-size:0.56rem;letter-spacing:1.5px;font-weight:700;border:1px solid;}
+.chain-ETH{color:#a78bfa;border-color:rgba(167,139,250,.3);background:rgba(167,139,250,.07);}
+.chain-BNB{color:#f5c518;border-color:rgba(245,197,24,.3);background:rgba(245,197,24,.07);}
+.chain-SOL{color:#9945ff;border-color:rgba(153,69,255,.3);background:rgba(153,69,255,.07);}
+.vol-cell{text-align:right;}
+.vol-val{font-size:0.82rem;font-weight:600;}
+.vol-bar{height:2px;margin-top:3px;border-radius:1px;background:linear-gradient(90deg,var(--amber),var(--amber2));}
+.green{color:var(--green);}.red{color:var(--red);}.amber{color:var(--amber);}.blue{color:var(--blue);}.muted{color:var(--muted);}
+.apr-wrap{display:flex;flex-direction:column;gap:2px;}
+.apr-val{font-weight:700;font-size:0.82rem;}
+.apr-bar{height:3px;border-radius:2px;margin-top:2px;max-width:80px;}
+.txn-cell{display:flex;flex-direction:column;gap:2px;}
+.txn-buys{font-size:0.7rem;color:var(--green);}.txn-sells{font-size:0.7rem;color:var(--red);}
+.ratio-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;font-size:0.65rem;font-weight:700;border-radius:2px;}
+.ratio-high{background:rgba(0,230,118,.1);color:var(--green);border:1px solid rgba(0,230,118,.2);}
+.ratio-med{background:rgba(245,166,35,.1);color:var(--amber);border:1px solid rgba(245,166,35,.2);}
+.ratio-low{background:rgba(26,34,53,.8);color:var(--muted);border:1px solid var(--border);}
+.fee-tag{display:inline-block;padding:2px 7px;font-size:0.6rem;letter-spacing:1px;font-weight:600;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);border-radius:2px;}
+.state-box{text-align:center;padding:70px 40px;}
+.spinner{width:40px;height:40px;border:2px solid var(--border2);border-top-color:var(--amber);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 18px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.state-txt{font-size:0.68rem;letter-spacing:2px;color:var(--muted);}
+.state-dex-list{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;}
+.state-dex-item{font-size:0.6rem;letter-spacing:1px;color:var(--muted);background:var(--panel2);border:1px solid var(--border);padding:4px 10px;}
+.state-dex-item.done{color:var(--green);border-color:rgba(0,230,118,.3);}
+.state-dex-item.loading{color:var(--amber);border-color:rgba(245,166,35,.3);animation:blink 1s infinite;}
+.state-dex-item.error{color:var(--red);border-color:rgba(255,23,68,.3);}
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border);background:var(--bg2);}
+.pg-info{font-size:0.62rem;color:var(--muted);}
+.pg-btns{display:flex;gap:6px;}
+.pg-btn{padding:5px 14px;background:var(--panel);border:1px solid var(--border);color:var(--text2);font-family:var(--mono);font-size:0.62rem;cursor:pointer;transition:all .15s;}
+.pg-btn:hover:not(:disabled){border-color:var(--amber);color:var(--amber);}
+.pg-btn:disabled{opacity:.3;cursor:not-allowed;}
+.rank{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:700;}
+.rank-1{background:linear-gradient(135deg,#ffd700,#ff8c00);color:#000;}
+.rank-2{background:linear-gradient(135deg,#c0c0c0,#808080);color:#000;}
+.rank-3{background:linear-gradient(135deg,#cd7f32,#8b4513);color:#fff;}
+.rank-n{background:var(--panel2);color:var(--muted);border:1px solid var(--border);}
+.sort-ico{margin-left:4px;opacity:.5;}
+.source-tag{font-size:0.55rem;padding:2px 6px;border-radius:2px;margin-left:6px;}
+.source-backend{background:rgba(0,230,118,.08);color:var(--green);border:1px solid rgba(0,230,118,.2);}
+.source-direct{background:rgba(245,166,35,.08);color:var(--amber);border:1px solid rgba(245,166,35,.2);}
+</style>
+</head>
+<body>
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ALERTS PANEL -->
+<div class="alerts-overlay hidden" id="alertsOverlay" onclick="closeAlerts(event)">
+  <div class="alerts-panel" id="alertsPanel">
+    <div class="ap-header">
+      <div class="ap-title">⚡ ALERTS</div>
+      <button class="ap-close" onclick="toggleAlerts()">✕</button>
+    </div>
+    <div class="ap-body">
+      <div class="ap-section">
+        <div class="ap-section-title">Create Alert</div>
+        <div class="alert-form">
+          <div class="af-row">
+            <div class="af-field">
+              <div class="af-label">Label</div>
+              <input class="af-input" id="af-label" placeholder="e.g. ETH/USDC spike">
+            </div>
+          </div>
+          <div class="af-row">
+            <div class="af-field">
+              <div class="af-label">Type</div>
+              <select class="af-select" id="af-type" onchange="updateThresholdLabel()">
+                <option value="vol_threshold">Volume Threshold</option>
+                <option value="vol_spike">Volume Spike %</option>
+                <option value="apr_threshold">APR Threshold</option>
+                <option value="new_top_pool">Top N Pools</option>
+              </select>
+            </div>
+            <div class="af-field">
+              <div class="af-label">DEX</div>
+              <select class="af-select" id="af-dex">
+                <option value="all">All DEXs</option>
+                <option value="uni-v2">Uniswap V2</option>
+                <option value="uni-v3">Uniswap V3</option>
+                <option value="uni-v4">Uniswap V4</option>
+                <option value="cake-v2">PancakeSwap V2</option>
+                <option value="cake-v3">PancakeSwap V3</option>
+                <option value="cake-v4">PancakeSwap V4</option>
+                <option value="meteora">Meteora</option>
+                <option value="orca">Orca</option>
+                <option value="jito">Jito</option>
+              </select>
+            </div>
+          </div>
+          <div class="af-row">
+            <div class="af-field">
+              <div class="af-label" id="af-threshold-label">Threshold ($)</div>
+              <input class="af-input" id="af-threshold" type="number" placeholder="1000000">
+            </div>
+            <div class="af-field">
+              <div class="af-label">Pool Name (optional)</div>
+              <input class="af-input" id="af-pool" placeholder="e.g. WETH/USDC">
+            </div>
+          </div>
+          <button class="add-alert-btn" onclick="addAlert()">+ ADD ALERT</button>
+        </div>
+      </div>
+
+      <div class="ap-section">
+        <div class="ap-section-title">Active Alerts (<span id="alertCountLabel">0</span>)</div>
+        <div class="alert-list" id="alertList">
+          <div class="no-alerts">No alerts set. Create one above.</div>
+        </div>
+      </div>
+
+      <div class="ap-section">
+        <div class="ap-section-title">Manual Check</div>
+        <button class="ap-check-btn" id="checkBtn" onclick="runAlertCheck()">⚡ CHECK NOW</button>
+        <div id="triggeredResults"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <!-- SETUP BANNER -->
+  <div class="setup-banner" id="setupBanner">
+    <span class="setup-txt">⚙ BACKEND URL — Enter your Vercel deployment URL to enable cached data &amp; alerts:</span>
+    <input class="setup-input" id="backendInput" placeholder="https://your-app.vercel.app" type="url">
+    <button class="setup-save" onclick="saveBackend()">SAVE</button>
+    <button class="setup-clear" onclick="useDirectMode()">Use Direct Mode</button>
+  </div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="brand">LP<span>VOL</span>SCAN</div>
+      <div class="tagline">Uniswap · PancakeSwap · Meteora · Orca · Jito — Volume Intelligence</div>
+    </div>
+    <div class="header-stats">
+      <div class="hstat"><div class="hstat-label">Pools Loaded</div><div class="hstat-val amber" id="hPools">—</div><div class="hstat-sub">across all DEXs</div></div>
+      <div class="hstat"><div class="hstat-label">Top 24H Vol</div><div class="hstat-val green" id="hTopVol">—</div><div class="hstat-sub" id="hTopVolPool">loading…</div></div>
+      <div class="hstat"><div class="hstat-label">Total Vol (24H)</div><div class="hstat-val cyan" id="hTotalVol">—</div><div class="hstat-sub">filtered pools</div></div>
+      <div class="hstat"><div class="hstat-label">Avg Fee APR</div><div class="hstat-val blue" id="hAvgApr">—</div><div class="hstat-sub">top 50 pools</div></div>
+    </div>
+    <div class="header-right">
+      <div class="live-row">
+        <div class="live-dot"></div>
+        <span class="live-txt" id="sourceLabel">LIVE</span>
+      </div>
+      <div class="ts" id="ts">—</div>
+      <div class="btn-row">
+        <button class="hdr-btn alert-btn" onclick="toggleAlerts()">⚡ ALERTS <span class="alert-count" id="alertCountBadge" style="display:none">0</span></button>
+        <button class="hdr-btn" onclick="init()">↻ REFRESH</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEX TABS -->
+  <div class="dex-tabs" id="dexTabs">
+    <div class="dex-tab all-tab active" data-dex="all" onclick="setDex('all')">
+      <div class="dex-tab-icon">◈</div>
+      <div class="dex-tab-name">ALL DEXS</div>
+      <div class="dex-tab-chain">9 protocols</div>
+      <div class="dex-tab-vol" id="tab-vol-all">—</div>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <input class="search" type="text" id="searchInput" placeholder="⌕  search pair, token, address…">
+    <div class="fgroup">
+      <span class="flabel">Sort</span>
+      <select class="fselect" id="sortSel">
+        <option value="vol24">↓ 24H Volume</option>
+        <option value="vol1h">↓ 1H Volume</option>
+        <option value="vol6h">↓ 6H Volume</option>
+        <option value="liq">↓ Liquidity</option>
+        <option value="apr">↓ Fee APR</option>
+        <option value="ratio">↓ Vol/Liq Ratio</option>
+        <option value="txns">↓ Transactions</option>
+        <option value="pchg">↓ 24H Price Chg</option>
+      </select>
+    </div>
+    <div class="fgroup">
+      <span class="flabel">Time</span>
+      <div class="time-btns">
+        <button class="time-btn active" data-t="h24" onclick="setTime('h24')">24H</button>
+        <button class="time-btn" data-t="h6" onclick="setTime('h6')">6H</button>
+        <button class="time-btn" data-t="h1" onclick="setTime('h1')">1H</button>
+      </div>
+    </div>
+    <div class="fgroup min-vol-wrap">
+      <span class="flabel">Min Vol</span>
+      <input class="range-input" type="range" id="minVolRange" min="0" max="7" step="1" value="2" oninput="onVolRange(this.value)">
+      <span class="range-val" id="minVolLabel">$50K</span>
+    </div>
+    <span class="results-count" id="resultCount">— pools</span>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-container">
+    <div id="tableWrap">
+      <div class="state-box">
+        <div class="spinner"></div>
+        <div class="state-txt">INITIALIZING…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const LS_BACKEND = 'lpvol_backend_url';
+const LS_ALERTS  = 'lpvol_alerts';
+const VOL_THRESHOLDS = [0,5000,50000,100000,500000,1000000,5000000,10000000];
+const VOL_LABELS     = ['$0','$5K','$50K','$100K','$500K','$1M','$5M','$10M'];
+const DEX_CONFIGS = [
+  {id:'uni-v2', short:'UNI V2', icon:'🦄', chain:'ETH', chainCls:'chain-ETH', badgeCls:'dex-uni-v2'},
+  {id:'uni-v3', short:'UNI V3', icon:'🦄', chain:'ETH', chainCls:'chain-ETH', badgeCls:'dex-uni-v3'},
+  {id:'uni-v4', short:'UNI V4', icon:'🦄', chain:'ETH', chainCls:'chain-ETH', badgeCls:'dex-uni-v4'},
+  {id:'cake-v2',short:'CAKE V2',icon:'🥞', chain:'BNB', chainCls:'chain-BNB', badgeCls:'dex-cake-v2'},
+  {id:'cake-v3',short:'CAKE V3',icon:'🥞', chain:'BNB', chainCls:'chain-BNB', badgeCls:'dex-cake-v3'},
+  {id:'cake-v4',short:'CAKE V4',icon:'🥞', chain:'BNB', chainCls:'chain-BNB', badgeCls:'dex-cake-v4'},
+  {id:'meteora',short:'METEOR', icon:'☄️', chain:'SOL', chainCls:'chain-SOL', badgeCls:'dex-meteora'},
+  {id:'orca',   short:'ORCA',   icon:'🐋', chain:'SOL', chainCls:'chain-SOL', badgeCls:'dex-orca'},
+  {id:'jito',   short:'JITO',   icon:'⚡', chain:'SOL', chainCls:'chain-SOL', badgeCls:'dex-jito'},
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let allPools=[], displayPools=[], alerts=[];
+let currentDex='all', currentTime='h24', currentSort='vol24', currentSearch='', minVol=50000, currentPage=1;
+const PAGE=50;
+let backendUrl=localStorage.getItem(LS_BACKEND)||'';
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+function start(){
+  alerts=JSON.parse(localStorage.getItem(LS_ALERTS)||'[]');
+  renderAlertList();
+
+  if(backendUrl){
+    document.getElementById('setupBanner').classList.add('hidden');
+    document.getElementById('sourceLabel').textContent='BACKEND';
+  } else {
+    document.getElementById('backendInput').value=backendUrl;
+  }
+  init();
+}
+
+async function init(){
+  allPools=[];
+  currentPage=1;
+  ['hPools','hTopVol','hTotalVol','hAvgApr'].forEach(id=>document.getElementById(id).textContent='—');
+
+  document.getElementById('tableWrap').innerHTML=`
+    <div class="state-box">
+      <div class="spinner"></div>
+      <div class="state-txt">SCANNING DEX POOLS…</div>
+      <div class="state-dex-list">
+        ${DEX_CONFIGS.map(d=>`<span class="state-dex-item loading" id="ldex-${d.id}">${d.icon} ${d.short}</span>`).join('')}
+      </div>
+    </div>`;
+
+  const results=await Promise.allSettled(DEX_CONFIGS.map(cfg=>fetchDex(cfg)));
+  results.forEach((r,i)=>{
+    const cfg=DEX_CONFIGS[i];
+    const el=document.getElementById(`ldex-${cfg.id}`);
+    if(r.status==='fulfilled'){
+      allPools.push(...r.value);
+      if(el){el.className='state-dex-item done';el.textContent=`${cfg.icon} ${cfg.short} (${r.value.length})`;}
+    } else {
+      if(el){el.className='state-dex-item error';el.textContent=`${cfg.icon} ${cfg.short} ✗`;}
+    }
+  });
+
+  document.getElementById('ts').textContent='Updated '+new Date().toLocaleTimeString();
+  buildDexTabs();
+  applyFilters();
+
+  // Check for spikes if backend is set
+  if(backendUrl) pollSpikes();
+}
+
+// ─── FETCH ────────────────────────────────────────────────────────────────────
+async function fetchDex(cfg){
+  if(backendUrl){
+    // Use backend proxy (cached, no rate limits)
+    const res=await fetch(`${backendUrl}/api/pools?dex=${cfg.id}`);
+    if(!res.ok) throw new Error(`Backend ${res.status}`);
+    const json=await res.json();
+    return (json.data||[]).map(p=>({...p, dexBadge:cfg.badgeCls, dexIcon:cfg.icon, chainCls:cfg.chainCls,
+      url:`https://www.geckoterminal.com/${p.network}/pools/${p.addr}`}));
+  } else {
+    // Direct GeckoTerminal call
+    const netMap={'uni-v2':'eth','uni-v3':'eth','uni-v4':'eth','cake-v2':'bsc','cake-v3':'bsc','cake-v4':'bsc','meteora':'solana','orca':'solana','jito':'solana'};
+    const dexMap={'uni-v2':'uniswap_v2','uni-v3':'uniswap_v3','uni-v4':'uniswap_v4','cake-v2':'pancakeswap_v2','cake-v3':'pancakeswap_v3','cake-v4':'pancakeswap-v4','meteora':'meteora','orca':'orca','jito':'jito'};
+    const network=netMap[cfg.id], dex=dexMap[cfg.id];
+    const res=await fetch(`https://api.geckoterminal.com/api/v2/networks/${network}/dexes/${dex}/pools?sort=h24_volume_usd_liquidity_desc&page=1`);
+    if(!res.ok) throw new Error(`GT ${res.status}`);
+    const json=await res.json();
+    return (json.data||[]).map(p=>normPool(p,cfg,network));
+  }
+}
+
+function normPool(p,cfg,network){
+  const a=p.attributes||{},vu=a.volume_usd||{},tx=a.transactions||{},pc=a.price_change_percentage||{};
+  const liq=parseFloat(a.reserve_in_usd)||0, v24=parseFloat(vu.h24)||0, v6=parseFloat(vu.h6)||0, v1=parseFloat(vu.h1)||0;
+  let fee=0.003;
+  const nm=(a.name||'').toUpperCase();
+  if(nm.includes('0.01%'))fee=0.0001;else if(nm.includes('0.05%'))fee=0.0005;else if(nm.includes('1%'))fee=0.01;
+  if(a.pool_fee) fee=parseFloat(a.pool_fee)/100;
+  const apr=liq>0?(v24*fee*365/liq*100):0, ratio=liq>0?v24/liq:0;
+  const t24=tx.h24||{}, addr=(p.id||'').split('_').pop();
+  return {
+    id:p.id, addr, name:a.name||'Unknown', dexId:cfg.id, dexName:cfg.short,
+    dexBadge:cfg.badgeCls, dexIcon:cfg.icon, chain:cfg.chain, chainCls:cfg.chainCls,
+    network, liq, vol24:v24, vol6h:v6, vol1h:v1,
+    buys:t24.buys||0, sells:t24.sells||0, txns24:(t24.buys||0)+(t24.sells||0),
+    pchg24:parseFloat(pc.h24)||0, pchg1h:parseFloat(pc.h1)||0,
+    fee, apr, ratio, fetchedAt:Date.now(),
+    url:`https://www.geckoterminal.com/${network}/pools/${addr}`,
+  };
+}
+
+// ─── SPIKE POLLING ────────────────────────────────────────────────────────────
+async function pollSpikes(){
+  try{
+    const res=await fetch(`${backendUrl}/api/spikes`);
+    const json=await res.json();
+    if(json.spikes && json.spikes.length>0){
+      json.spikes.slice(0,3).forEach(s=>{
+        showToast('spike','🔥 Volume Spike',`${s.pool} +${s.pctChange}% on ${s.dex}`);
+      });
+    }
+  } catch(e){ /* silent */ }
+}
+
+// ─── BUILD TABS ───────────────────────────────────────────────────────────────
+function buildDexTabs(){
+  const container=document.getElementById('dexTabs');
+  container.querySelectorAll(':not(.all-tab)').forEach(el=>el.remove());
+  const allVol=allPools.reduce((a,b)=>a+(b.vol24||0),0);
+  document.getElementById('tab-vol-all').textContent=fmt$(allVol);
+  DEX_CONFIGS.forEach(cfg=>{
+    const pools=allPools.filter(p=>p.dexId===cfg.id);
+    const vol=pools.reduce((a,b)=>a+(b.vol24||0),0);
+    const tab=document.createElement('div');
+    tab.className='dex-tab'+(currentDex===cfg.id?' active':'');
+    tab.dataset.dex=cfg.id;
+    tab.onclick=()=>setDex(cfg.id);
+    tab.innerHTML=`
+      <div class="dex-tab-status ${pools.length>0?'ok':'error'}"></div>
+      <div class="dex-tab-icon">${cfg.icon}</div>
+      <div class="dex-tab-name">${cfg.short}</div>
+      <div class="dex-tab-chain">${cfg.chain} · ${pools.length} pools</div>
+      <div class="dex-tab-vol">${pools.length>0?fmt$(vol):'<span style="color:var(--red);font-size:.55rem">NO DATA</span>'}</div>`;
+    container.appendChild(tab);
+  });
+}
+
+// ─── FILTERS & RENDER ─────────────────────────────────────────────────────────
+function applyFilters(){
+  let pools=[...allPools];
+  if(currentDex!=='all') pools=pools.filter(p=>p.dexId===currentDex);
+  const vf=volField();
+  pools=pools.filter(p=>(p[vf]||0)>=minVol);
+  if(currentSearch){const q=currentSearch.toLowerCase();pools=pools.filter(p=>p.name.toLowerCase().includes(q)||p.dexName.toLowerCase().includes(q)||p.chain.toLowerCase().includes(q)||p.addr.toLowerCase().includes(q));}
+  pools.sort((a,b)=>{
+    if(currentSort==='vol24') return (b.vol24||0)-(a.vol24||0);
+    if(currentSort==='vol1h') return (b.vol1h||0)-(a.vol1h||0);
+    if(currentSort==='vol6h') return (b.vol6h||0)-(a.vol6h||0);
+    if(currentSort==='liq')   return (b.liq||0)-(a.liq||0);
+    if(currentSort==='apr')   return (b.apr||0)-(a.apr||0);
+    if(currentSort==='ratio') return (b.ratio||0)-(a.ratio||0);
+    if(currentSort==='txns')  return (b.txns24||0)-(a.txns24||0);
+    if(currentSort==='pchg')  return (b.pchg24||0)-(a.pchg24||0);
+    return 0;
+  });
+  displayPools=pools;
+  document.getElementById('resultCount').textContent=`${pools.length} pools`;
+  updateHeaderStats(pools);
+  renderTable();
+}
+
+function volField(){return currentTime==='h24'?'vol24':currentTime==='h6'?'vol6h':'vol1h';}
+
+function updateHeaderStats(pools){
+  document.getElementById('hPools').textContent=allPools.length.toLocaleString();
+  const sorted=[...pools].sort((a,b)=>(b.vol24||0)-(a.vol24||0));
+  const top=sorted[0];
+  if(top){document.getElementById('hTopVol').textContent=fmt$(top.vol24);document.getElementById('hTopVolPool').textContent=top.name.slice(0,22);}
+  document.getElementById('hTotalVol').textContent=fmt$(pools.reduce((a,b)=>a+(b.vol24||0),0));
+  const aprs=pools.filter(p=>p.apr>0).slice(0,50).map(p=>p.apr);
+  document.getElementById('hAvgApr').textContent=aprs.length?fmtApr(aprs.reduce((a,b)=>a+b,0)/aprs.length):'—';
+}
+
+function renderTable(){
+  const start=(currentPage-1)*PAGE, page=displayPools.slice(start,start+PAGE), total=Math.ceil(displayPools.length/PAGE);
+  if(!page.length){document.getElementById('tableWrap').innerHTML='<div class="state-box"><div class="state-txt">NO POOLS MATCH YOUR FILTERS</div></div>';return;}
+  const maxVol=Math.max(...page.map(p=>p[volField()]||0),1), maxLiq=Math.max(...page.map(p=>p.liq||0),1);
+  const tl=currentTime==='h24'?'24H':currentTime==='h6'?'6H':'1H';
+  const rows=page.map((pool,i)=>{
+    const rank=start+i+1;
+    const rk=rank===1?`<span class="rank rank-1">1</span>`:rank===2?`<span class="rank rank-2">2</span>`:rank===3?`<span class="rank rank-3">3</span>`:`<span class="rank rank-n">${rank}</span>`;
+    const vol=pool[volField()]||0, bw=Math.max(2,Math.round(vol/maxVol*100)), lw=Math.max(2,Math.round((pool.liq||0)/maxLiq*100));
+    let rc='ratio-low',rl='LOW';if(pool.ratio>=2){rc='ratio-high';rl='HIGH';}else if(pool.ratio>=.5){rc='ratio-med';rl='MED';}
+    const av=pool.apr||0, aw=Math.min(100,Math.round(av/500*100));
+    const ac=av>200?'var(--green)':av>50?'var(--amber)':'var(--blue)';
+    const pi=(pool.name||'??').split('/')[0].trim().slice(0,3).toUpperCase();
+    const lg=pool.chain==='ETH'?'linear-gradient(135deg,#627eea,#9945ff)':pool.chain==='BNB'?'linear-gradient(135deg,#f0b90b,#ff6b00)':'linear-gradient(135deg,#9945ff,#14f195)';
+    const fp=pool.fee?(pool.fee*100).toFixed(2)+'%':'—';
+    const pc24=pool.pchg24||0, pcc=pc24>0?'green':pc24<0?'red':'muted', pcs=pc24>0?'+':'';
+    return `
+    <tr onclick="window.open('${pool.url}','_blank')">
+      <td style="padding-left:16px;width:48px">${rk}</td>
+      <td><div class="pool-cell"><div class="pool-logo" style="background:${lg}">${pi}</div><div><div class="pool-name-main">${pool.name}</div><div class="pool-addr">${pool.addr.slice(0,6)}…${pool.addr.slice(-4)}</div></div></div></td>
+      <td><span class="dex-badge ${pool.dexBadge}">${pool.dexIcon} ${pool.dexName}</span></td>
+      <td><span class="chain-badge ${pool.chainCls}">${pool.chain}</span></td>
+      <td class="vol-cell"><div class="vol-val amber">${fmt$(vol)}</div><div class="vol-bar" style="width:${bw}%"></div></td>
+      <td class="vol-cell"><div style="font-size:.75rem" class="muted">${fmt$(pool.vol1h)}</div></td>
+      <td class="vol-cell"><div style="font-size:.75rem" class="muted">${fmt$(pool.vol6h)}</div></td>
+      <td class="vol-cell"><div style="font-size:.75rem">${fmt$(pool.liq)}</div><div class="vol-bar" style="width:${lw}%;background:linear-gradient(90deg,var(--blue),var(--cyan))"></div></td>
+      <td><div class="apr-wrap"><span class="apr-val" style="color:${ac}">${fmtApr(av)}</span><div class="apr-bar" style="background:${ac};width:${aw}%;opacity:.4"></div></div></td>
+      <td><div class="txn-cell"><span class="txn-buys">▲ ${fmt0(pool.buys)}</span><span class="txn-sells">▼ ${fmt0(pool.sells)}</span></div></td>
+      <td><span class="${pcc}">${pcs}${pc24.toFixed(2)}%</span></td>
+      <td><span class="ratio-pill ${rc}">${pool.ratio.toFixed(2)}x</span></td>
+      <td><span class="fee-tag">${fp}</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('tableWrap').innerHTML=`
+    <table><thead><tr>
+      <th style="width:48px">#</th>
+      <th>POOL PAIR</th>
+      <th>DEX</th>
+      <th>CHAIN</th>
+      <th class="${currentSort==='vol24'?'sorted':''}" onclick="setSort('vol24')">${tl} VOL<span class="sort-ico">↕</span></th>
+      <th class="${currentSort==='vol1h'?'sorted':''}" onclick="setSort('vol1h')">1H VOL<span class="sort-ico">↕</span></th>
+      <th class="${currentSort==='vol6h'?'sorted':''}" onclick="setSort('vol6h')">6H VOL<span class="sort-ico">↕</span></th>
+      <th class="${currentSort==='liq'?'sorted':''}" onclick="setSort('liq')">LIQUIDITY<span class="sort-ico">↕</span></th>
+      <th class="${currentSort==='apr'?'sorted':''}" onclick="setSort('apr')">FEE APR<span class="sort-ico">↕</span></th>
+      <th class="${currentSort==='txns'?'sorted':''}" onclick="setSort('txns')">TXNS 24H<span class="sort-ico">↕</span></th>
+      <th class="${currentSort==='pchg'?'sorted':''}" onclick="setSort('pchg')">24H Δ<span class="sort-ico">↕</span></th>
+      <th class="${currentSort==='ratio'?'sorted':''}" onclick="setSort('ratio')">VOL/LIQ<span class="sort-ico">↕</span></th>
+      <th>FEE TIER</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    <div class="pagination">
+      <span class="pg-info">Showing ${start+1}–${Math.min(start+PAGE,displayPools.length)} of ${displayPools.length} pools · page ${currentPage}/${total||1}</span>
+      <div class="pg-btns">
+        <button class="pg-btn" onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>← PREV</button>
+        <button class="pg-btn" onclick="goPage(${currentPage+1})" ${currentPage>=total?'disabled':''}>NEXT →</button>
+      </div>
+    </div>`;
+}
+
+// ─── CONTROLS ─────────────────────────────────────────────────────────────────
+function setDex(id){currentDex=id;currentPage=1;document.querySelectorAll('.dex-tab').forEach(t=>t.classList.toggle('active',t.dataset.dex===id));applyFilters();}
+function setTime(t){currentTime=t;currentPage=1;document.querySelectorAll('.time-btn').forEach(b=>b.classList.toggle('active',b.dataset.t===t));applyFilters();}
+function setSort(s){currentSort=s;document.getElementById('sortSel').value=s;currentPage=1;applyFilters();}
+function onVolRange(v){minVol=VOL_THRESHOLDS[parseInt(v)];document.getElementById('minVolLabel').textContent=VOL_LABELS[parseInt(v)];currentPage=1;applyFilters();}
+function goPage(p){currentPage=p;renderTable();window.scrollTo({top:0,behavior:'smooth'});}
+document.getElementById('searchInput').addEventListener('input',e=>{currentSearch=e.target.value;currentPage=1;applyFilters();});
+document.getElementById('sortSel').addEventListener('change',e=>setSort(e.target.value));
+
+// ─── BACKEND SETUP ─────────────────────────────────────────────────────────────
+function saveBackend(){
+  const url=document.getElementById('backendInput').value.trim().replace(/\/$/,'');
+  if(!url){alert('Please enter a valid URL');return;}
+  backendUrl=url;
+  localStorage.setItem(LS_BACKEND,url);
+  document.getElementById('setupBanner').classList.add('hidden');
+  document.getElementById('sourceLabel').textContent='BACKEND';
+  showToast('info','✅ Backend Saved',`Connected to ${url}`);
+  init();
+}
+function useDirectMode(){
+  backendUrl='';
+  localStorage.removeItem(LS_BACKEND);
+  document.getElementById('setupBanner').classList.add('hidden');
+  document.getElementById('sourceLabel').textContent='DIRECT';
+  init();
+}
+
+// ─── ALERTS ──────────────────────────────────────────────────────────────────
+function toggleAlerts(){document.getElementById('alertsOverlay').classList.toggle('hidden');}
+function closeAlerts(e){if(e.target===document.getElementById('alertsOverlay'))toggleAlerts();}
+
+function updateThresholdLabel(){
+  const type=document.getElementById('af-type').value;
+  const labels={vol_threshold:'Threshold ($ volume)',vol_spike:'Spike % increase',apr_threshold:'APR % threshold',new_top_pool:'Top N rank cutoff'};
+  document.getElementById('af-threshold-label').textContent=labels[type]||'Threshold';
+}
+
+function addAlert(){
+  const label=document.getElementById('af-label').value.trim();
+  const type=document.getElementById('af-type').value;
+  const dexId=document.getElementById('af-dex').value;
+  const threshold=parseFloat(document.getElementById('af-threshold').value);
+  const poolName=document.getElementById('af-pool').value.trim();
+  if(!label||isNaN(threshold)){showToast('spike','⚠ Missing fields','Please fill in label and threshold.');return;}
+  const alert={id:crypto.randomUUID(),label,type,dexId,threshold,poolName:poolName||null,createdAt:Date.now()};
+  alerts.push(alert);
+  localStorage.setItem(LS_ALERTS,JSON.stringify(alerts));
+  renderAlertList();
+  document.getElementById('af-label').value='';
+  document.getElementById('af-threshold').value='';
+  document.getElementById('af-pool').value='';
+  showToast('info','✅ Alert Added',label);
+}
+
+function deleteAlert(id){
+  alerts=alerts.filter(a=>a.id!==id);
+  localStorage.setItem(LS_ALERTS,JSON.stringify(alerts));
+  renderAlertList();
+}
+
+function renderAlertList(){
+  const list=document.getElementById('alertList');
+  const count=document.getElementById('alertCountLabel');
+  const badge=document.getElementById('alertCountBadge');
+  count.textContent=alerts.length;
+  badge.textContent=alerts.length;
+  badge.style.display=alerts.length>0?'inline-flex':'none';
+  if(!alerts.length){list.innerHTML='<div class="no-alerts">No alerts set. Create one above.</div>';return;}
+  const typeLabels={vol_threshold:'Vol ≥',vol_spike:'Spike ≥',apr_threshold:'APR ≥',new_top_pool:'Top'};
+  const typeUnits={vol_threshold:'',vol_spike:'%',apr_threshold:'%',new_top_pool:' pools'};
+  list.innerHTML=alerts.map(a=>`
+    <div class="alert-item">
+      <div class="ai-info">
+        <div class="ai-label">${a.label}</div>
+        <div class="ai-meta">${typeLabels[a.type]||''} ${a.threshold}${typeUnits[a.type]||''} · ${a.dexId==='all'?'All DEXs':a.dexId}${a.poolName?' · '+a.poolName:''}</div>
+      </div>
+      <button class="ai-del" onclick="deleteAlert('${a.id}')">✕</button>
+    </div>`).join('');
+}
+
+async function runAlertCheck(){
+  if(!alerts.length){showToast('info','ℹ No Alerts','Add some alerts first.');return;}
+  const btn=document.getElementById('checkBtn');
+  btn.disabled=true;btn.textContent='⏳ CHECKING…';
+  const resultsEl=document.getElementById('triggeredResults');
+  resultsEl.innerHTML='';
+  try{
+    let url, opts;
+    if(backendUrl){
+      url=`${backendUrl}/api/alerts/check`;
+      opts={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({alerts})};
+    } else {
+      // Client-side evaluation against loaded pools
+      const triggered=evaluateAlertsLocally(alerts, allPools);
+      showAlertResults(triggered, resultsEl);
+      btn.disabled=false;btn.textContent='⚡ CHECK NOW';
+      return;
+    }
+    const res=await fetch(url,opts);
+    const json=await res.json();
+    showAlertResults(json.triggered||[], resultsEl);
+  } catch(e){
+    resultsEl.innerHTML=`<div style="color:var(--red);font-size:.68rem;margin-top:8px">Error: ${e.message}</div>`;
+  }
+  btn.disabled=false;btn.textContent='⚡ CHECK NOW';
+}
+
+function evaluateAlertsLocally(rules, pools){
+  const triggered=[];
+  for(const rule of rules){
+    let scope=rule.dexId&&rule.dexId!=='all'?pools.filter(p=>p.dexId===rule.dexId):pools;
+    if(rule.poolName){const q=rule.poolName.toLowerCase();scope=scope.filter(p=>p.name.toLowerCase().includes(q));}
+    if(rule.type==='vol_threshold'){
+      scope.filter(p=>(p.vol24||0)>=rule.threshold).forEach(p=>triggered.push({ruleId:rule.id,label:rule.label,pool:p.name,dexId:p.dexId,value:p.vol24,message:`${p.name} vol $${fmtNum(p.vol24)} ≥ $${fmtNum(rule.threshold)}`}));
+    } else if(rule.type==='apr_threshold'){
+      scope.filter(p=>(p.apr||0)>=rule.threshold).forEach(p=>triggered.push({ruleId:rule.id,label:rule.label,pool:p.name,dexId:p.dexId,value:p.apr,message:`${p.name} APR ${p.apr.toFixed(1)}% ≥ ${rule.threshold}%`}));
+    } else if(rule.type==='new_top_pool'){
+      scope.sort((a,b)=>(b.vol24||0)-(a.vol24||0)).slice(0,rule.threshold).forEach((p,i)=>triggered.push({ruleId:rule.id,label:rule.label,pool:p.name,rank:i+1,message:`#${i+1} ${p.name} vol $${fmtNum(p.vol24)}`}));
+    }
+  }
+  return triggered;
+}
+
+function showAlertResults(triggered, el){
+  if(!triggered.length){el.innerHTML='<div style="color:var(--muted);font-size:.68rem;margin-top:10px;text-align:center">No alerts triggered.</div>';return;}
+  triggered.slice(0,3).forEach(t=>showToast('spike','🚨 Alert Triggered',t.message));
+  el.innerHTML=`<div class="triggered-list">${triggered.map(t=>`<div class="trig-item"><span class="trig-pool">${t.pool}</span><br>${t.message}</div>`).join('')}</div>`;
+}
+
+// ─── TOASTS ───────────────────────────────────────────────────────────────────
+function showToast(type,title,msg){
+  const c=document.getElementById('toastContainer');
+  const id='t'+Date.now();
+  const div=document.createElement('div');
+  div.className=`toast ${type}`;div.id=id;
+  div.innerHTML=`<div class="toast-icon">${type==='spike'?'🔥':'ℹ️'}</div><div class="toast-body"><div class="toast-title">${title}</div><div class="toast-msg">${msg}</div></div><button class="toast-close" onclick="document.getElementById('${id}').remove()">✕</button>`;
+  c.appendChild(div);
+  setTimeout(()=>div.remove(),7000);
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function fmt$(n){if(!n||isNaN(n))return'—';if(Math.abs(n)>=1e9)return'$'+(n/1e9).toFixed(2)+'B';if(Math.abs(n)>=1e6)return'$'+(n/1e6).toFixed(2)+'M';if(Math.abs(n)>=1e3)return'$'+(n/1e3).toFixed(1)+'K';return'$'+n.toFixed(0);}
+function fmtApr(n){if(!n||isNaN(n))return'—';if(n>=1000)return(n/1000).toFixed(1)+'K%';return n.toFixed(1)+'%';}
+function fmt0(n){if(!n)return'0';return n.toLocaleString();}
+function fmtNum(n){if(!n)return'0';if(n>=1e9)return(n/1e9).toFixed(2)+'B';if(n>=1e6)return(n/1e6).toFixed(2)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toFixed(0);}
+
+// Auto-refresh every 2 min
+setInterval(()=>{if(document.visibilityState==='visible')init();},120000);
+
+start();
+</script>
+</body>
+</html>
