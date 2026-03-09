@@ -1,11 +1,4 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1.js" }
-  ],
   "crons": [
     {
       "path": "/api/cron/check-alerts",
@@ -29,6 +22,8 @@ Click **Commit changes**
 
 ---
 
-Vercel will automatically redeploy when you commit. Wait ~60 seconds then test:
+Then go to **Vercel dashboard → your project → Deployments** and check if it auto-redeployed. If not, click the **3 dots → Redeploy**.
+
+Wait 30 seconds then try:
 ```
 https://lp-monitor-backend.vercel.app/api/health
